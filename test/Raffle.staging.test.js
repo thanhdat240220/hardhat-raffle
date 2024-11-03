@@ -28,7 +28,6 @@ deploymentChains.includes(network.name) ?
                 
                 await new Promise(async (resolve, reject) => {
                     raffle.once("WinnerChoose", async () => {
-                        console.log("WinnerChoose event fired !");
                         try {
                             const recentWinner = await raffle.getRecentWinner();
                             const raffleState = await raffle.getRaffleState();

@@ -2,7 +2,7 @@ const { network, ethers } = require("hardhat");
 const { deploymentChains, networkConfigs } = require("../helper-hardhat.config");
 const { verify } = require("../utils/verify");
 
-const SUBSCRIPTION_FUND = ethers.utils.parseEther('1');
+const SUBSCRIPTION_FUND = ethers.utils.parseEther('10');
 
 module.exports = async ({
     getNamedAccounts,
@@ -11,12 +11,12 @@ module.exports = async ({
     const { deploy, get } = deployments;
     const { deployer } = await getNamedAccounts();
     const chainId = network.config.chainId;
-    let coordinatorV2Address, 
-    subscriptionId,
-    interval = 30;
+    let coordinatorV2Address,
+        subscriptionId,
+        interval = 30;
 
     if (deploymentChains.includes(network.name)) {
-        const coordinatorV2Contract = await ethers.getContract('VRFCoordinatorV2Mock');
+        const coordinatorV2Contract = await ethers.getContract('VRFCoordinatorV2_5Mock');
         coordinatorV2Address = coordinatorV2Contract.address;
         const transactionResponse = await coordinatorV2Contract.createSubscription();
         const transactionReceipt = await transactionResponse.wait(1);
@@ -26,7 +26,7 @@ module.exports = async ({
         subscriptionId = networkConfigs[network.config.chainId]['subId'];
         coordinatorV2Address = networkConfigs[network.config.chainId]['vrfCoordinator'];
     }
-    
+
     const entranceFee = ethers.utils.parseEther('0.01');
     const gasLane = networkConfigs[chainId]["gasLane"];
     const callbackGasLimit = networkConfigs[network.config.chainId]['callbackGasLimit'];
@@ -42,18 +42,23 @@ module.exports = async ({
         interval
     ];
 
-    const raffle = await deploy("Raffle", {
+    const raffleContract = await deploy("Raffle", {
         from: deployer,
         args: args,
         log: true,
         waitConfirmations: network.config.blockConfirmations || 1,
     });
 
+    if (deploymentChains.includes(network.name)) {
+        const vrfCoordinatorV2Mock = await ethers.getContract("VRFCoordinatorV2_5Mock");
+        await vrfCoordinatorV2Mock.addConsumer(subscriptionId, raffleContract.address);
+    }
+
     if (
         !deploymentChains.includes(network.name) &&
         process.env.ETHERSCAN_API_KEY
     ) {
-        await verify(raffle.address, args);
+        await verify(raffleContract.address, args);
     }
 };
 

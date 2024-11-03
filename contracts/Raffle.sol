@@ -4,6 +4,7 @@ import "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
 import "@chainlink/contracts/src/v0.8/vrf/dev/interfaces/IVRFCoordinatorV2PlusInternal.sol";
 import "@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
 import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+import "hardhat/console.sol";
 
 error Raffle_NotEnoughETH();
 error Raffle_TransferFail();
@@ -26,13 +27,16 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
     uint256 private immutable i_subscriptionId;
     uint32 private immutable i_callbackGasLimit;
     uint16 private constant REQUEST_CONFIRMATION = 3;
-    uint16 private constant NUM_WORDS = 2;
+    uint16 private constant NUM_WORDS = 1;
     uint256 private s_lastTimeStamp;
     uint256 private immutable s_interval;
 
     event RaffleEnter(address indexed player);
     event RequestRaffleWinner(uint256 indexed requestId);
     event WinnerChoose(address indexed winner);
+    event FulfillRandomWords(uint256 indexed reuquestId);
+    event StartFulfillRandomWords();
+    event CheckUpkeepEvent(bool Upkeep);
 
     constructor(
         address vfrCoordinator2,
@@ -75,6 +79,7 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
         }
 
         s_state = RaffleState.CALCULATING;
+        emit StartFulfillRandomWords();
         uint256 requestId = i_vrfCoordinator.requestRandomWords(
             VRFV2PlusClient.RandomWordsRequest({
                 keyHash: i_gasLane,
@@ -87,6 +92,8 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
                 )
             })
         );
+        emit FulfillRandomWords(requestId);
+        console.log("RequestId", requestId);
         //
         emit RequestRaffleWinner(requestId);
     }
@@ -96,12 +103,16 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
         uint256[] calldata randomWords
     ) internal override {
         uint256 indexOfWinner = randomWords[0] % s_players.length;
+        console.log("indexOfWinner", indexOfWinner);
         address recentWinner = s_players[indexOfWinner];
+        console.log("recentWinner", recentWinner, address(this).balance);
         s_recentWinner = recentWinner;
         (bool success, ) = recentWinner.call{value: address(this).balance}("");
 
-        // open again
+        //
         s_state = RaffleState.OPEN;
+        s_lastTimeStamp = block.timestamp;
+        s_players = new address payable[](0);
 
         if (!success) {
             revert Raffle_TransferFail();
@@ -111,15 +122,16 @@ contract Raffle is VRFConsumerBaseV2Plus, AutomationCompatibleInterface {
 
     function checkUpkeep(
         bytes memory /** checkData */
-    ) public override returns (
-        bool upKeepNeeded,
-        bytes memory 
-    ) {
+    ) public override returns (bool upkeepNeeded, bytes memory) {
         bool isOpen = (RaffleState.OPEN == s_state);
-        bool timePassed = (block.timestamp - s_lastTimeStamp) > s_interval;
+        bool timePassed = ((block.timestamp - s_lastTimeStamp) > s_interval);
         bool hasPlayer = (s_players.length > 0);
 
-        upKeepNeeded = isOpen && timePassed && hasPlayer;
+        upkeepNeeded = isOpen && timePassed && hasPlayer;
+        // emit CheckUpkeepEvent(upkeepNeeded, timePassed, hasPlayer);
+        console.log("upkeepNeeded", upkeepNeeded);
+        emit CheckUpkeepEvent(upkeepNeeded);
+        return (upkeepNeeded, "0x0");
     }
 
     function getEntranceFee() public view returns (uint256) {

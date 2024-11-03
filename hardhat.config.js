@@ -12,7 +12,16 @@ const account_1_private_key = process.env.PRIVATE_KEY;
 const etherscan_api_key = process.env.ETHERSCAN_API_KEY;
 
 module.exports = {
-  solidity: "0.8.27",
+  solidity: {
+    compilers: [
+      {
+        version: "0.8.27",
+      },
+      {
+        version: "0.8.19",
+      },
+    ],
+  },
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {
